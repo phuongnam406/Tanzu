@@ -1,0 +1,379 @@
+# Lab 1: Setting Up a Bootstrap Machine
+
+## Task 2: Verify That Docker Is Running
+
+sudo systemctl status docker
+docker ps
+
+## Task 3: Install the Kubernetes CLI
+
+cd ~/Downloads
+gunzip kubectl-linux-v1.22.9+vmware.1.gz
+sudo install kubectl-linux-v1.22.9+vmware.1 /usr/local/bin/kubectl
+kubectl version --short --client=true
+
+## Task 4: Enable Kubernetes CLI Autocompletion
+
+echo 'source <(kubectl completion bash)' >> ~/.bash_profile
+
+## Task 5: Install the Tanzu CLI and Plug-Ins
+
+cd ~/Downloads
+tar -xvf tanzu-cli-bundle-linux-amd64.tar.gz
+sudo install cli/core/v0.11.6/tanzu-core-linux_amd64 /usr/local/bin/tanzu
+tanzu version
+tanzu init
+tanzu plugin list
+
+## Task 6: Enable Tanzu CLI Autocompletion
+
+echo 'source <(tanzu completion bash)' >> ~/.bash_profile
+
+## Task 7: Install the Carvel Tools
+
+cd ~/Downloads
+ls -l cli/*.gz
+./install-carvel.sh
+
+
+# Lab 3: Deploying a Management Cluster
+
+## Task 2: Create a Management Cluster
+
+source ~/workspace/harbor-vars.sh
+tanzu management-cluster create --ui
+
+## Task 3: Examine the Management Cluster
+
+tanzu management-cluster kubeconfig get --admin
+kubectl config get-contexts
+kubectl config use-context sa-compute-01-mgmt-admin@sa-compute-01-mgmt
+kubectl get pods -A
+kubectl get nodes
+tanzu plugin list
+
+
+# Lab 4: Deploying a Tanzu Kubernetes Cluster
+
+## Task 2: Create a Tanzu Kubernetes Cluster Configuration File
+
+cd ~/workspace/clusterconfigs
+cp tanzucluster.yaml tkc-01.yaml
+checkconfig tkc-01.yaml
+tanzu cluster create -f tkc-01.yaml --dry-run
+
+## Task 3: Create a Tanzu Kubernetes Cluster
+
+source ~/workspace/harbor-vars.sh
+cd ~/workspace/clusterconfigs
+tanzu cluster create -f tkc-01.yaml
+tanzu cluster list
+
+
+# Lab 5: Managing a Tanzu Kubernetes Cluster
+
+## Task 2: Examine the Tanzu Kubernetes Cluster
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config get-contexts
+kubectl config use-context tkc-01-admin@tkc-01
+kubectl get pods -A
+kubectl get packageinstalls -A
+kubectl get nodes
+
+## Task 3: Scale the Tanzu Kubernetes Cluster
+
+tanzu cluster list
+tanzu cluster scale tkc-01 -w 2
+tanzu cluster list
+kubectl config use-context sa-compute-01-mgmt-admin@sa-compute-01-mgmt
+tanzu cluster list
+
+
+# Lab 6: Examining the Tanzu Package CLI Plug-In
+
+## Task 2: Work with Package Repositories
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package repository list -A
+tanzu package repository get tanzu-standard -n tanzu-package-repo-global
+tanzu package repository add tanzu-standard-online --url projects.registry.vmware.com/tkg/packages/standard/repo -n tanzu-package-online-repo-global --create-namespace
+tanzu package repository list -A
+tanzu package repository delete tanzu-standard-online -n tanzu-package-online-repo-global
+kubectl delete namespace tanzu-package-online-repo-global
+tanzu package repository list -A
+kubectl get namespaces
+
+## Task 3: Work with Packages
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+tanzu package available get harbor.tanzu.vmware.com
+tanzu package installed list -A
+
+
+# Lab 7: Deploying cert-manager
+
+## Task 2: Deploy cert-manager
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+tanzu package install cert-manager -p cert-manager.tanzu.vmware.com --version <LATEST-VERSION> -n cert-manager --create-namespace
+tanzu package installed list -n cert-manager
+kubectl get pods -n cert-manager
+
+
+# Lab 8: Deploying Contour
+
+## Task 2: Deploy Contour
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+cd ~/workspace/packages/ingress/
+tanzu package install contour --package-name contour.tanzu.vmware.com --version <LATEST-VERSION> --values-file contour-data-values.yaml --namespace tanzu-system-ingress --create-namespace
+tanzu package installed list -n tanzu-system-ingress
+kubectl get app contour -n tanzu-system-ingress
+kapp list -n tanzu-system-ingress
+kapp inspect --app contour-ctrl -n tanzu-system-ingress
+kubectl get service -n tanzu-system-ingress
+
+
+# Lab 9: Deploying Fluent Bit
+
+## Task 2: Deploy Fluent Bit
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+cd ~/workspace/packages/fluent-bit
+tanzu package install fluent-bit --package-name fluent-bit.tanzu.vmware.com --version <LATEST-VERSION> --values-file fluent-bit-data-values.yaml -n tanzu-system-logging --create-namespace
+tanzu package installed list -n tanzu-system-logging
+kubectl get pods -n tanzu-system-logging
+
+
+# Lab 10: Deploying Multus CNI
+
+## Task 2: Deploy Multus CNI
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+tanzu package install multus-cni --package-name multus-cni.tanzu.vmware.com --version <LATEST_VERSION> --namespace tanzu-system-multus-cni --create-namespace
+tanzu package installed list -n tanzu-system-multus-cni
+kubectl get pods -n kube-system
+
+## Task 3: Deploy a Pod with Multiple Network Interfaces
+
+cd ~/workspace/packages/multus-cni
+cat multus-cni-crd.yaml
+kubectl apply -f multus-cni-crd.yaml
+cat my-multi-cni-pod.yaml
+kubectl apply -f my-multi-cni-pod.yaml
+kubectl describe pod sample-pod
+kubectl exec sample-pod -- ip a
+
+
+# Lab 11: Deploying the External DNS
+
+## Task 2: Retrieve the Secret Key for DNS Updates
+
+cat /etc/bind/named.conf.local
+
+## Task 3: Configure the External DNS
+
+cd ~/workspace/packages/external-dns
+checkconfig external-dns-data-values.yaml
+
+## Task 4: Deploy the External DNS
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+cd ~/workspace/packages/external-dns/
+tanzu package install external-dns --package-name external-dns.tanzu.vmware.com --version <LATEST-VERSION> --values-file external-dns-data-values.yaml --namespace tanzu-system-service-discovery --create-namespace
+tanzu package installed list -n tanzu-system-service-discovery
+kubectl get pods -n tanzu-system-service-discovery
+
+
+# Lab 12: Deploying Prometheus and Grafana
+
+## Task 2: Deploy Prometheus
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+tanzu package install prometheus --package-name prometheus.tanzu.vmware.com --version <LATEST-VERSION> --namespace tanzu-system-monitoring-prometheus --create-namespace
+tanzu package installed list -n tanzu-system-monitoring-prometheus
+kubectl get pods -n tanzu-system-monitoring
+
+## Task 3: Configure Grafana
+
+cd ~/workspace/packages/grafana
+echo -n "VMware1!" | base64
+checkconfig grafana-data-values.yaml
+
+## Task 4: Deploy Grafana
+
+tanzu cluster kubeconfig get tkc-01 --admin
+kubectl config use-context tkc-01-admin@tkc-01
+tanzu package available list
+tanzu package install grafana --package-name grafana.tanzu.vmware.com --version <LATEST-VERSION> --values-file grafana-data-values.yaml --namespace tanzu-system-monitoring-grafana --create-namespace
+tanzu package installed list -n  tanzu-system-monitoring-grafana
+kubectl get pods -n tanzu-system-monitoring-grafana
+
+
+# Lab 13: Providing Access to a Developer and Deploying a workload
+
+## Task 1: Prepare a kubeconfig File for the Cluster
+
+cd ~/workspace
+tanzu cluster get tkc-01
+tanzu cluster kubeconfig get tkc-01 --export-file kubeconfig-developers.yaml
+cat kubeconfig-developers.yaml
+
+## Task 2: Create a Role Binding to Grant Developer Access
+
+cd ~/workspace
+kubectl config use-context tkc-01-admin@tkc-01
+cat ldap-group-role-binding.yaml
+kubectl apply -f ldap-group-role-binding.yaml
+
+## Task 3: Access the Cluster as a Developer
+
+cd ~/workspace
+export KUBECONFIG=~/workspace/kubeconfig-developers.yaml
+kubectl get pods -A
+kubectl config get-contexts
+
+## Task 4: Deploy a Workload
+
+cd ~/workspace
+export KUBECONFIG=~/workspace/kubeconfig-developers.yaml
+cat vmbeans.yaml
+kubectl apply -f vmbeans.yaml
+kubectl get service,deployment,pod
+
+## Task 5: Inspect the NSX Advanced Load Balancer UI
+
+cd ~/workspace/
+./gen-vmbeans-http-req.sh
+
+# Lab 14: Using Ingress and NodePortLocal to Deploy an Application
+
+## Task 2: Create an Avi Kubernetes Operator Configuration
+
+cd ~/workspace/nsx-alb
+kubectl config use-context sa-compute-01-mgmt-admin@sa-compute-01-mgmt
+cat ako-npl.yaml
+kubectl apply -f ako-npl.yaml
+
+## Task 3: Create a Tanzu Kubernetes Grid Workload Cluster
+
+source ~/workspace/harbor-vars.sh
+cd ~/workspace/clusterconfigs
+cat tkc-02.yaml
+tanzu cluster create -f tkc-02.yaml
+kubectl label cluster tkc-02 npl-enabled=true
+tanzu cluster kubeconfig get tkc-02 --admin
+kubectl config use-context tkc-02-admin@tkc-02
+tanzu package install cert-manager -p cert-manager.tanzu.vmware.com --version 1.5.3+vmware.2-tkg.1 -n cert-manager --create-namespace
+tanzu package install external-dns --package-name external-dns.tanzu.vmware.com --version 0.10.0+vmware.1-tkg.1 --values-file ~/workspace/nsx-alb/external-dns-data-values-tkc-02.yaml --namespace tanzu-system-service-discovery --create-namespace
+
+## Task 4: Deploy an Ingress Application
+
+tanzu cluster kubeconfig get tkc-02 --admin
+kubectl config use-context tkc-02-admin@tkc-02
+cd ~/workspace/nsx-alb
+cat vmbeans-npl.yaml 
+kubectl apply -f vmbeans-npl.yaml
+kubectl get pods,deployment,service,ingress
+kubectl describe pods | less
+
+# Lab 15: Configuring and Running Crash Diagnostics
+
+## Task 1: Install the Crash Diagnostics CLI
+
+cd ~/Downloads
+tar -zxvf crashd-linux-amd64-v0.3.7+vmware.3-1-g3c97e12.tar.gz
+sudo install crashd/crashd-linux-amd64-v0.3.7+vmware.3-1-g3c97e12 /usr/local/bin/crashd
+crashd --help
+
+## Task 2: Configure the Crash Diagnostics Arguments File
+
+cd ~/Downloads/crashd
+code args
+checkconfig args
+
+## Task 3: Run the Crash Diagnostics CLI
+
+crashd run --debug --args-file args diagnostics.crsh
+find ./workdir/tkg-mgmt-cluster
+crashd run --debug --args-file args --args target=workload diagnostics.crsh
+tree -d -L 2 ./workdir/tkc-01 | less
+
+
+# Lab 16: Performing Basic Troubleshooting
+
+## Task 1: Use SSH to Connect to a Node
+
+kubectl config use-context tkc-01-admin@tkc-01
+kubectl get nodes -o wide
+ssh capv@<CONTROL_PLANE_IP_ADDRESS>
+sudo -i
+cd /var/log/containers
+ls -l
+cd /var/log/kubernetes
+ls -l
+
+
+# Lab 17: (Bonus) Building a Windows Custom Image
+
+## Task 3: Deploy the Builder App in the Management Cluster
+
+tanzu management-cluster kubeconfig get --admin
+kubectl config use-context sa-compute-01-mgmt-admin@sa-compute-01-mgmt
+cd ~/workspace/imagebuilder/windows
+kubectl apply -f builder.yaml
+kubectl get pods -n imagebuilder
+
+## Task 4: Retrieve the URL and SHA of the containerd Component
+
+tanzu management-cluster kubeconfig get --admin
+kubectl config use-context sa-compute-01-mgmt-admin@sa-compute-01-mgmt
+kubectl get nodes -owide
+curl http://<INTERNAL-IP>:30008
+
+## Task 5: Prepare the Image Builder Windows Configuration
+
+cd ~/workspace/imagebuilder/windows
+code windows.json
+checkconfig windows.json
+
+## Task 6: Build the Windows Image
+
+cd ~/workspace/imagebuilder/windows
+docker run -it --rm --mount type=bind,source=$(pwd)/windows.json,target=/windows.json --mount type=bind,source=$(pwd)/autounattend.xml,target=/home/imagebuilder/packer/ova/windows/windows-2019/autounattend.xml -e PACKER_VAR_FILES="/windows.json" -e IB_OVFTOOL=1 -e IB_OVFTOOL_ARGS='--skipManifestCheck' -e PACKER_FLAGS='-force -on-error=ask' -t projects.registry.vmware.com/tkg/image-builder:v0.1.11_vmware.3 build-node-ova-vsphere-windows-2019
+
+
+# Lab 18: (Bonus) Deploying a Windows Tanzu Kubernetes Cluster
+
+## Task 2: Create a Windows Tanzu Kubernetes Cluster Configuration File
+
+cd ~/workspace/clusterconfigs
+cp tanzucluster.yaml tkc-windows.yaml
+checkconfig tkc-windows.yaml
+tanzu cluster create -f tkc-windows.yaml --dry-run
+
+## Task 3: Create a Windows Tanzu Kubernetes Cluster
+
+source ~/workspace/harbor-vars.sh
+cd ~/workspace/clusterconfigs
+tanzu cluster create -f tkc-windows.yaml
+tanzu cluster list
+
+
+
